@@ -9,7 +9,8 @@
     "doctypes": "^1.0.0",
     "jade-runtime": "^1.0.0",
     "js-stringify": "^1.0.1",
-    "void-elements": "^2.0.1"
+    "void-elements": "^2.0.1",
+    "with": "^5.0.0"
   },
   "devDependencies": {
     "mocha": "*"

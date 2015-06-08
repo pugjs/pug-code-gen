@@ -7,6 +7,17 @@ var selfClosing = require('void-elements');
 var parseJSExpression = require('character-parser').parseMax;
 var constantinople = require('constantinople');
 var stringify = require('js-stringify');
+var addWith = require('with');
+
+var INTERNAL_VARIABLES = [
+  'jade',
+  'jade_mixins',
+  'jade_interp',
+  'jade_debug_filename',
+  'jade_debug_line',
+  'jade_debug_sources',
+  'buf'
+];
 
 module.exports = generateCode;
 module.exports.CodeGenerator = Compiler;
@@ -102,7 +113,32 @@ Compiler.prototype = {
         }
       }
     }
-    return buildRuntime(this.runtimeFunctionsUsed) + this.buf.join('\n');
+    var js = this.buf.join('\n');
+    var globals = this.options.globals ? this.options.globals.concat(INTERNAL_VARIABLES) : INTERNAL_VARIABLES;
+    if (this.options.self) {
+      js = 'var self = locals || {};' + js;
+    } else {
+      js = addWith('locals || {}', js, globals.concat(this.runtimeFunctionsUsed.map(function (name) { return 'jade_' + name; })));
+    }
+    if (this.debug) {
+      if (this.options.includeSources) {
+        js = 'var jade_debug_sources = ' + stringify(this.options.includeSources) + ';\n' + js;
+      }
+      js = 'var jade_debug_filename, jade_debug_line;' +
+        'try {' +
+        js +
+        '} catch (err) {' +
+        (this.inlineRuntimeFunctions ? 'jade_rethrow' : 'jade.rethrow') +
+        '(err, jade_debug_filename, jade_debug_line' +
+        (
+          this.options.includeSources
+          ? ', jade_debug_sources[jade_debug_filename]'
+          : ''
+        ) +
+        ');' +
+        '}';
+    }
+    return buildRuntime(this.runtimeFunctionsUsed) + 'function ' + (this.options.templateName || 'template') + '(locals) {var buf = [], jade_mixins = {}, jade_interp;' + js + ';return buf.join("");}';
   },
 
   /**

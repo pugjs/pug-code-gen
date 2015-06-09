@@ -8,6 +8,8 @@ var parseJSExpression = require('character-parser').parseMax;
 var constantinople = require('constantinople');
 var stringify = require('js-stringify');
 var addWith = require('with');
+var getGlobals = require('acorn-globals');
+var shasum = require('shasum');
 
 var INTERNAL_VARIABLES = [
   'jade',
@@ -16,6 +18,7 @@ var INTERNAL_VARIABLES = [
   'jade_debug_filename',
   'jade_debug_line',
   'jade_debug_sources',
+  'jade_indent',
   'buf'
 ];
 
@@ -55,6 +58,7 @@ function Compiler(node, options) {
   this.parentIndents = 0;
   this.terse = false;
   this.mixins = {};
+  this.calledMixins = [];
   this.dynamicMixins = false;
   if (options.doctype) this.setDoctype(options.doctype);
   this.runtimeFunctionsUsed = [];
@@ -88,6 +92,7 @@ Compiler.prototype = {
     throw err;
   },
 
+  
   /**
    * Compile parse tree to JavaScript.
    *
@@ -96,36 +101,46 @@ Compiler.prototype = {
 
   compile: function(){
     this.buf = [];
-    if (this.pp) this.buf.push("var jade_indent = [];");
+    if (this.pp) this.buf.push("jade_indent = [];");
     this.lastBufferedIdx = -1;
     this.visit(this.node);
+    var topLevelMixins = [];
+    
+    // begin by marking all the mixins that have been called.  This process is recursive.
     if (!this.dynamicMixins) {
-      // if there are no dynamic mixins we can remove any un-used mixins
-      var mixinNames = Object.keys(this.mixins);
-      for (var i = 0; i < mixinNames.length; i++) {
-        var mixin = this.mixins[mixinNames[i]];
-        if (!mixin.used) {
-          for (var x = 0; x < mixin.instances.length; x++) {
-            for (var y = mixin.instances[x].start; y < mixin.instances[x].end; y++) {
-              this.buf[y] = '';
-            }
+      var changed;
+      do {
+        changed = false;
+        Object.keys(this.mixins).forEach(function (key) {
+          if (this.mixins[key].names.some(function (name) { return this.calledMixins.indexOf(name) !== -1; }.bind(this))) {
+            this.mixins[key].calledMixins.forEach(function (calledMixin) {
+              if (this.calledMixins.indexOf(calledMixin) === -1) {
+                this.calledMixins.push(calledMixin);
+                changed = true;
+              }
+            }.bind(this));
           }
-        }
-      }
+        }.bind(this));
+      } while (changed);
     }
-    var js = this.buf.join('\n');
+    // make a note of all top level mixins that have been called
+
+    Object.keys(this.mixins).forEach(function (key) {
+      if (this.mixins[key].isTopLevel && (this.dynamicMixins || this.mixins[key].names.some(function (name) { return this.calledMixins.indexOf(name) !== -1; }.bind(this)))) {
+        topLevelMixins.push(this.mixins[key]);
+      }
+    }.bind(this));
+    
+    var js = this.replaceDelayedContent(this.buf.join('\n'));
     var globals = this.options.globals ? this.options.globals.concat(INTERNAL_VARIABLES) : INTERNAL_VARIABLES;
+    globals = globals.concat(Object.keys(this.mixins));
     if (this.options.self) {
       js = 'var self = locals || {};' + js;
     } else {
       js = addWith('locals || {}', js, globals.concat(this.runtimeFunctionsUsed.map(function (name) { return 'jade_' + name; })));
     }
     if (this.debug) {
-      if (this.options.includeSources) {
-        js = 'var jade_debug_sources = ' + stringify(this.options.includeSources) + ';\n' + js;
-      }
-      js = 'var jade_debug_filename, jade_debug_line;' +
-        'try {' +
+      js = 'try {' +
         js +
         '} catch (err) {' +
         (this.inlineRuntimeFunctions ? 'jade_rethrow' : 'jade.rethrow') +
@@ -138,7 +153,20 @@ Compiler.prototype = {
         ');' +
         '}';
     }
-    return buildRuntime(this.runtimeFunctionsUsed) + 'function ' + (this.options.templateName || 'template') + '(locals) {var buf = [], jade_mixins = {}, jade_interp;' + js + ';return buf.join("");}';
+    js = 'function ' + (this.options.templateName || 'template') + '(locals) {var buf = [];' + js + ';return buf.join("");}';
+    // add top level mixins outside the JavaScript function
+    js = topLevelMixins.map(function (mixin) {
+      return mixin.buf;
+    }.bind(this)).join('\n') + js;
+    if (this.debug) {
+      if (this.options.includeSources) {
+        js = 'var jade_debug_sources = ' + stringify(this.options.includeSources) + ';\n' + js;
+      }
+      js = 'var jade_debug_filename, jade_debug_line;' + js;
+    }
+    if (this.pp) js = 'var jade_indent;' + js;
+    js = 'var jade_mixins = {}, jade_interp;' + js;
+    return buildRuntime(this.runtimeFunctionsUsed) + js;
   },
 
   /**
@@ -154,6 +182,43 @@ Compiler.prototype = {
     this.doctype = doctypes[name.toLowerCase()] || '<!DOCTYPE ' + name + '>';
     this.terse = this.doctype.toLowerCase() == '<!doctype html>';
     this.xml = 0 == this.doctype.indexOf('<?xml');
+  },
+
+  addBufferStack: function () {
+    var self = this;
+    var originalLastBufferedIdx = this.lastBufferedIdx;
+    var originalLastBufferedType = this.lastBufferedType;
+    var originalLastBuffered = this.lastBuffered;
+    var originalBufferStartChar = this.bufferStartChar;
+    var originalBuf = this.buf;
+
+    this.lastBufferedIdx = -1;
+    this.lastBufferedType = undefined;
+    this.lastBuffered = undefined;
+    this.bufferStartChar = undefined;
+    this.buf = [];
+    return function () {
+      var buf = self.buf;
+      self.lastBufferedIdx = originalLastBufferedIdx;
+      self.lastBufferedType = originalLastBufferedType;
+      self.lastBuffered = originalLastBuffered;
+      self.bufferStartChar = originalBufferStartChar;
+      self.buf = originalBuf;
+      return buf;
+    };
+  },
+
+  delayedContent: function (fn) {
+    this.delayedContentId = this.delayedContentId || 0;
+    this.delayedContentId++;
+    this.delayedContentBlocks = this.delayedContentBlocks || {};
+    this.delayedContentBlocks[this.delayedContentId] = fn;
+    return 'jade_delayed_content_block(' + this.delayedContentId + ')';
+  },
+  replaceDelayedContent: function (js) {
+    return js.replace(/jade_delayed_content_block\((\d+)\)/g, function (_, id) {
+      return this.delayedContentBlocks[id] ? this.replaceDelayedContent(this.delayedContentBlocks[id].call(this)) : _;
+    }.bind(this));
   },
 
   /**
@@ -263,7 +328,6 @@ Compiler.prototype = {
     }
 
     this.visitNode(node);
-    //this.buf.push('');
   },
 
   /**
@@ -362,7 +426,7 @@ Compiler.prototype = {
 
   visitMixinBlock: function(block){
     if (this.pp) this.buf.push("jade_indent.push('" + Array(this.indents + 1).join(this.pp) + "');");
-    this.buf.push('block && block();');
+    this.bufferExpression('block ? block() : ""');
     if (this.pp) this.buf.push("jade_indent.pop();");
   },
 
@@ -393,86 +457,144 @@ Compiler.prototype = {
    */
 
   visitMixin: function(mixin){
+    if (mixin.call) {
+      this.visitMixinCall(mixin);
+    } else {
+      this.visitMixinDefinition(mixin);
+    }
+  },
+  visitMixinCall: function (mixin) {
     var name = 'jade_mixins[';
-    var args = mixin.args || '';
+    var dynamic = mixin.name[0]==='#';
+    if (dynamic) this.dynamicMixins = true;
+    else this.calledMixins.push(mixin.name);
+
+    name += (dynamic ? mixin.name.substr(2,mixin.name.length-3):'"'+mixin.name+'"')+']';
+    
+    var args = mixin.args ? mixin.args.split(',') : [];
     var block = mixin.block;
     var attrs = mixin.attrs;
     var attrsBlocks = mixin.attributeBlocks && mixin.attributeBlocks.slice();
     var pp = this.pp;
-    var dynamic = mixin.name[0]==='#';
-    var key = mixin.name;
-    if (dynamic) this.dynamicMixins = true;
-    name += (dynamic ? mixin.name.substr(2,mixin.name.length-3):'"'+mixin.name+'"')+']';
+    if (pp) this.buf.push("jade_indent.push('" + Array(this.indents + 1).join(pp) + "');")
 
-    this.mixins[key] = this.mixins[key] || {used: false, instances: []};
-    if (mixin.call) {
-      this.mixins[key].used = true;
-      if (pp) this.buf.push("jade_indent.push('" + Array(this.indents + 1).join(pp) + "');")
-      if (block || attrs.length || attrsBlocks.length) {
-
-        this.buf.push(name + '.call({');
-
-        if (block) {
-          this.buf.push('block: function(){');
-
-          // Render block with no indents, dynamically added when rendered
-          this.parentIndents++;
-          var _indents = this.indents;
-          this.indents = 0;
-          this.visit(mixin.block);
-          this.indents = _indents;
-          this.parentIndents--;
-
-          if (attrs.length || attrsBlocks.length) {
-            this.buf.push('},');
-          } else {
-            this.buf.push('}');
-          }
-        }
-
-        if (attrsBlocks.length) {
-          if (attrs.length) {
-            var val = this.attrs(attrs);
-            attrsBlocks.unshift(val);
-          }
-          this.buf.push('attributes: ' + this.runtime('merge') + '([' + attrsBlocks.join(',') + '])');
-        } else if (attrs.length) {
-          var val = this.attrs(attrs);
-          this.buf.push('attributes: ' + val);
-        }
-
-        if (args) {
-          this.buf.push('}, ' + args + ');');
-        } else {
-          this.buf.push('});');
-        }
-
-      } else {
-        this.buf.push(name + '(' + args + ');');
-      }
-      if (pp) this.buf.push("jade_indent.pop();")
-    } else {
-      var mixin_start = this.buf.length;
-      args = args ? args.split(',') : [];
-      var rest;
-      if (args.length && /^\.\.\./.test(args[args.length - 1].trim())) {
-        rest = args.pop().trim().replace(/^\.\.\./, '');
-      }
-      this.buf.push(name + ' = function(' + args.join(',') + '){');
-      this.buf.push('var block = (this && this.block), attributes = (this && this.attributes) || {};');
-      if (rest) {
-        this.buf.push('var ' + rest + ' = [];');
-        this.buf.push('for (jade_interp = ' + args.length + '; jade_interp < arguments.length; jade_interp++) {');
-        this.buf.push('  ' + rest + '.push(arguments[jade_interp]);');
-        this.buf.push('}');
-      }
-      this.parentIndents++;
-      this.visit(block);
-      this.parentIndents--;
-      this.buf.push('};');
-      var mixin_end = this.buf.length;
-      this.mixins[key].instances.push({start: mixin_start, end: mixin_end});
+    if (attrs.length) {
+      attrsBlocks.unshift(this.attrs(attrs));
     }
+    if (block || attrsBlocks.length) {
+      var stack = this.addBufferStack();
+      this.buf.push('{');
+      if (block) {
+        this.buf.push('block: function(){var buf = [];');
+
+        // Render block with no indents, dynamically added when rendered
+        this.parentIndents++;
+        var _indents = this.indents;
+        this.indents = 0;
+        this.visit(mixin.block);
+        this.indents = _indents;
+        this.parentIndents--;
+        this.buf.push(';return buf.join("");');
+        if (attrsBlocks.length) {
+          this.buf.push('},');
+        } else {
+          this.buf.push('}');
+        }
+      }
+
+      if (attrsBlocks.length === 1) {
+        this.buf.push('attributes: ' + attrsBlocks[0]);
+      } else if (attrsBlocks.length) {
+        this.buf.push('attributes: ' + this.runtime('merge') + '([' + attrsBlocks.join(',') + '])');
+      }
+      this.buf.push('}');
+      args.unshift(stack().join(''));
+    } else {
+      args.unshift('null');
+    }
+    if (dynamic) {
+      this.bufferExpression('jade_mixins[' + mixin.name.substr(2,mixin.name.length-3) + '](' + args.join(',') + ')');
+    } else {
+      this.bufferExpression(this.delayedContent(function () {
+        var mixinsWithName = Object.keys(this.mixins).filter(function (key) {
+          return this.mixins[key].names.indexOf(mixin.name) !== -1;
+        }.bind(this));
+        if (mixinsWithName.length === 1) {
+          return mixinsWithName[0];
+        } else if (mixinsWithName.length > 1) {
+          return 'jade_mixins["' + mixin.name + '"]';
+        } else {
+          return 'function () { throw new Error("Mixin \\"' + mixin.name + '\\" is not defined"); }';
+        }
+      }) + '(' + args.join(',') + ')');
+    }
+    if (pp) this.buf.push("jade_indent.pop();")
+  },
+  visitMixinDefinition: function (mixin) {
+    var originalCalledMixins = this.calledMixins;
+    this.calledMixins = [];
+    var args = mixin.args ? mixin.args.split(',') : [];
+    args.unshift('jade_mixin_data');
+    var rest;
+    if (/^\.\.\../.test(args[args.length - 1].trim())) {
+      rest = args.pop().trim().replace(/^\.\.\./, '');
+    }
+    var stack = this.addBufferStack();
+    if (rest) {
+      this.buf.push('var ' + rest + ' = [];');
+      this.buf.push('for (jade_interp = ' + args.length + '; jade_interp < arguments.length; jade_interp++) {');
+      this.buf.push('  ' + rest + '.push(arguments[jade_interp]);');
+      this.buf.push('}');
+    }
+    this.parentIndents++;
+    this.visit(mixin.block);
+    this.parentIndents--;
+    var buf = stack().join('\n');
+    
+    var globals;
+    try {
+      globals = getGlobals(buf).map(function (variable) { return variable.name; });
+    } catch (ex) {
+      ex.message += ' in ' + mixin.name + ' mixin in ' + mixin.filename;
+      throw ex;
+    }
+
+    if (globals.indexOf('attributes') !== -1) {
+      buf = 'var attributes = (jade_mixin_data && jade_mixin_data.attributes) || {};' + buf;
+    }
+    if (globals.indexOf('block') !== -1) {
+      buf = 'var block = jade_mixin_data && jade_mixin_data.block;' + buf;
+    }
+    buf = '(' + args.join(',') + ') {var buf = [];' + buf + ';return buf.join("")}';
+    var key = 'jade_mixin_' + shasum(buf) + '_' + mixin.name.replace(/[^\w]/g, '_');
+    buf = 'function ' + key + buf;
+
+    var runtimeFunctionsUsed = this.runtimeFunctionsUsed;
+    this.mixins[key] = this.mixins[key] || {
+      names: [],
+      buf: buf,
+      calledMixins: this.calledMixins,
+      isTopLevel: !globals.some(function (name) {
+        return args.indexOf(name) === -1 && name !== 'attributes' && name !== 'block' &&
+          INTERNAL_VARIABLES.indexOf(name) === -1 &&
+          runtimeFunctionsUsed.indexOf(name.replace(/^jade_/, '')) === -1;
+      })
+    };
+    if (!this.mixins[key].isTopLevel) {
+      this.buf.push(this.delayedContent(function () {
+        return this.dynamicMixins || this.calledMixins.indexOf(mixin.name) !== -1 ? buf : '';
+      }.bind(this)));
+    }
+    this.buf.push(this.delayedContent(function () {
+      var multipleMixinsShareName = Object.keys(this.mixins).filter(function (key) {
+        return this.mixins[key].names.indexOf(mixin.name) !== -1;
+      }.bind(this)).length > 1;
+      return this.dynamicMixins || (this.calledMixins.indexOf(mixin.name) !== -1 && multipleMixinsShareName) ? ('jade_mixins["' + mixin.name + '"] = ' + key + ';') : '';
+    }.bind(this)));
+    if (this.mixins[key].names.indexOf(mixin.name) === -1) {
+      this.mixins[key].names.push(mixin.name);
+    }
+    this.calledMixins = originalCalledMixins;
   },
 
   /**

@@ -4,11 +4,13 @@
   "description": "Default code-generator for jade.  It generates HTML via a JavaScript template function.",
   "keywords": [],
   "dependencies": {
+    "acorn-globals": "^1.0.4",
     "character-parser": "^1.2.2",
     "constantinople": "^3.0.1",
     "doctypes": "^1.0.0",
     "jade-runtime": "^1.0.0",
     "js-stringify": "^1.0.1",
+    "shasum": "^1.0.1",
     "void-elements": "^2.0.1",
     "with": "^5.0.0"
   },

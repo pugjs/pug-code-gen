@@ -16,7 +16,7 @@ var INTERNAL_VARIABLES = [
   'jade_debug_filename',
   'jade_debug_line',
   'jade_debug_sources',
-  'buf'
+  'jade_html'
 ];
 
 module.exports = generateCode;
@@ -138,7 +138,7 @@ Compiler.prototype = {
         ');' +
         '}';
     }
-    return buildRuntime(this.runtimeFunctionsUsed) + 'function ' + (this.options.templateName || 'template') + '(locals) {var buf = [], jade_mixins = {}, jade_interp;' + js + ';return buf.join("");}';
+    return buildRuntime(this.runtimeFunctionsUsed) + 'function ' + (this.options.templateName || 'template') + '(locals) {var jade_html = "", jade_mixins = {}, jade_interp;' + js + ';return jade_html;}';
   },
 
   /**
@@ -192,9 +192,9 @@ Compiler.prototype = {
       if (this.lastBufferedType === 'code') this.lastBuffered += ' + "';
       this.lastBufferedType = 'text';
       this.lastBuffered += str;
-      this.buf[this.lastBufferedIdx - 1] = 'buf.push(' + this.bufferStartChar + this.lastBuffered + '");'
+      this.buf[this.lastBufferedIdx - 1] = 'jade_html = jade_html + ' + this.bufferStartChar + this.lastBuffered + '";';
     } else {
-      this.buf.push('buf.push("' + str + '");');
+      this.buf.push('jade_html = jade_html + "' + str + '";');
       this.lastBufferedType = 'text';
       this.bufferStartChar = '"';
       this.lastBuffered = str;
@@ -217,9 +217,9 @@ Compiler.prototype = {
       if (this.lastBufferedType === 'text') this.lastBuffered += '"';
       this.lastBufferedType = 'code';
       this.lastBuffered += ' + (' + src + ')';
-      this.buf[this.lastBufferedIdx - 1] = 'buf.push(' + this.bufferStartChar + this.lastBuffered + ');'
+      this.buf[this.lastBufferedIdx - 1] = 'jade_html = jade_html + (' + this.bufferStartChar + this.lastBuffered + ');';
     } else {
-      this.buf.push('buf.push(' + src + ');');
+      this.buf.push('jade_html = jade_html + (' + src + ');');
       this.lastBufferedType = 'code';
       this.bufferStartChar = '';
       this.lastBuffered = '(' + src + ')';
@@ -241,7 +241,7 @@ Compiler.prototype = {
     newline = newline ? '\n' : '';
     this.buffer(newline + Array(this.indents + offset).join(this.pp));
     if (this.parentIndents)
-      this.buf.push("buf.push.apply(buf, jade_indent);");
+      this.buf.push('jade_html = jade_html + jade_indent.join("");');
   },
 
   /**

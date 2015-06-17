@@ -1,6 +1,6 @@
 {
   "name": "jade-code-gen",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Default code-generator for jade.  It generates HTML via a JavaScript template function.",
   "keywords": [],
   "dependencies": {

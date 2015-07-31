@@ -435,7 +435,11 @@ Compiler.prototype = {
             var val = this.attrs(attrs);
             attrsBlocks.unshift(val);
           }
-          this.buf.push('attributes: ' + this.runtime('merge') + '([' + attrsBlocks.join(',') + '])');
+          if (attrsBlocks.length > 1) {
+            this.buf.push('attributes: ' + this.runtime('merge') + '([' + attrsBlocks.join(',') + '])');
+          } else {
+            this.buf.push('attributes: ' + attrsBlocks[0]);
+          }
         } else if (attrs.length) {
           var val = this.attrs(attrs);
           this.buf.push('attributes: ' + val);

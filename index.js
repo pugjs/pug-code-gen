@@ -9,6 +9,7 @@ var parseJSExpression = require('character-parser').parseMax;
 var constantinople = require('constantinople');
 var stringify = require('js-stringify');
 var addWith = require('with');
+var walk = require('jade-walk');
 
 var INTERNAL_VARIABLES = [
   'jade',
@@ -58,7 +59,25 @@ function Compiler(node, options) {
   this.mixins = {};
   this.dynamicMixins = false;
   this.eachCount = 0;
-  if (options.doctype) this.setDoctype(options.doctype);
+  if (options.doctype) {
+    this.setDoctype(options.doctype);
+  } else {
+    var doctypeList = [];
+    // doctypes[name.toLowerCase()] || '<!DOCTYPE ' + name + '>';
+    walk(node, function (node) {
+      if (node.type === 'Doctype' && node.val) {
+        var name = doctypes[node.val.toLowerCase()] || '<!DOCTYPE ' + node.val + '>';
+        if (doctypeList.indexOf(name) === -1) {
+          doctypeList.push(name);
+        }
+      }
+    });
+    if (doctypeList.length === 1) {
+      this.doctype = doctypeList[0];
+      this.terse = this.doctype.toLowerCase() == '<!doctype html>';
+      this.xml = 0 == this.doctype.indexOf('<?xml');
+    }
+  }
   this.runtimeFunctionsUsed = [];
   this.inlineRuntimeFunctions = options.inlineRuntimeFunctions;
   if (this.debug && this.inlineRuntimeFunctions) {

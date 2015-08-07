@@ -3,6 +3,7 @@
 var doctypes = require('doctypes');
 var buildRuntime = require('jade-runtime/build');
 var runtime = require('jade-runtime');
+var compileAttrs = require('jade-attrs');
 var selfClosing = require('void-elements');
 var parseJSExpression = require('character-parser').parseMax;
 var constantinople = require('constantinople');
@@ -705,80 +706,15 @@ Compiler.prototype = {
    */
 
   attrs: function(attrs, buffer){
-    var buf = [];
-    var classes = [];
-    var classEscaping = [];
-
-    var addAttribute = function (key, val, escaped) {
-      if (isConstant(val)) {
-        if (buffer) {
-          this.buffer(runtime.attr(key, toConstant(val), escaped, this.terse));
-        } else {
-          var val = toConstant(val);
-          if (escaped && !(key.indexOf('data') === 0 && typeof val !== 'string')) {
-            val = runtime.escape(val);
-          }
-          buf.push(stringify(key) + ': ' + stringify(val));
-        }
-      } else {
-        if (buffer) {
-          this.bufferExpression(this.runtime('attr') + '("' + key + '", ' + val + ', ' + stringify(escaped) + ', ' + stringify(this.terse) + ')');
-        } else {
-          var val = val;
-          if (escaped && !(key.indexOf('data') === 0)) {
-            val = this.runtime('escape') + '(' + val + ')';
-          } else if (escaped) {
-            val = '(typeof (jade_interp = ' + val + ') == "string" ? ' + this.runtime('escape') + '(jade_interp) : jade_interp)';
-          }
-          buf.push(stringify(key) + ': ' + val);
-        }
-      }
-    }.bind(this);
-    attrs.forEach(function(attr){
-      var key = attr.name;
-      var val = attr.val;
-      var escaped = attr.escaped;
-
-      if (key === 'class') {
-        classes.push(val);
-        classEscaping.push(escaped);
-      } else {
-        if (key === 'style') {
-          if (isConstant(val)) {
-            val = stringify(runtime.style(toConstant(val)));
-          } else {
-            val = this.runtime('style') + '(' + val + ')';
-          }
-        }
-        addAttribute(key, val, escaped);
-      }
-    }.bind(this));
-    if (classes.length) {
-      if (classes.every(isConstant)) {
-        addAttribute(
-          'class',
-          stringify(runtime.classes(classes.map(toConstant), classEscaping)),
-          false
-        );
-      } else {
-        classes = classes.map(function (cls, i) {
-          if (isConstant(cls)) {
-            cls = stringify(runtime.classes(
-              [toConstant(cls)],
-              classEscaping[i]
-            ));
-            classEscaping[i] = false;
-          }
-          return cls;
-        });
-        addAttribute(
-          'class',
-          this.runtime('classes') + '([' + classes.join(',') + '], ' + stringify(classEscaping) + ')',
-          false
-        );
-      }
+    var res = compileAttrs(attrs, {
+      terse: this.terse,
+      format: buffer ? 'html' : 'object',
+      runtime: this.runtime.bind(this)
+    });
+    if (buffer)  {
+      this.bufferExpression(res);
     }
-    return '{' + buf.join(',') + '}';
+    return res;
   }
 };
 

@@ -10,6 +10,12 @@ var constantinople = require('constantinople');
 var stringify = require('js-stringify');
 var addWith = require('with');
 
+// This is used to prevent pretty printing inside certain tags
+var WHITE_SPACE_SENSITIVE_TAGS = {
+  pre: true,
+  textarea: true
+};
+
 var INTERNAL_VARIABLES = [
   'jade',
   'jade_mixins',
@@ -502,7 +508,7 @@ Compiler.prototype = {
       else self.buffer(name);
     }
 
-    if ('pre' == tag.name) this.escape = true;
+    if (WHITE_SPACE_SENSITIVE_TAGS[tag.name] === true) this.escape = true;
 
     if (!this.hasCompiledTag) {
       if (!this.hasCompiledDoctype && 'html' == name) {
@@ -539,7 +545,7 @@ Compiler.prototype = {
       this.visit(tag.block);
 
       // pretty print
-      if (pp && !tag.isInline && 'pre' != tag.name && !tagCanInline(tag))
+      if (pp && !tag.isInline && WHITE_SPACE_SENSITIVE_TAGS[tag.name] !== true && !tagCanInline(tag))
         this.prettyIndent(0, true);
 
       this.buffer('</');
@@ -547,7 +553,7 @@ Compiler.prototype = {
       this.buffer('>');
     }
 
-    if ('pre' == tag.name) this.escape = false;
+    if (WHITE_SPACE_SENSITIVE_TAGS[tag.name] === true) this.escape = false;
 
     this.indents--;
   },

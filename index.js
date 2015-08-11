@@ -51,6 +51,7 @@ function toConstant(src) {
 function Compiler(node, options) {
   this.options = options = options || {};
   this.node = node;
+  this.bufferedConcatenationCount = 0;
   this.hasCompiledDoctype = false;
   this.hasCompiledTag = false;
   this.pp = options.pretty || false;
@@ -196,12 +197,16 @@ Compiler.prototype = {
     str = stringify(str);
     str = str.substr(1, str.length - 2);
 
-    if (this.lastBufferedIdx == this.buf.length) {
-      if (this.lastBufferedType === 'code') this.lastBuffered += ' + "';
+    if (this.lastBufferedIdx == this.buf.length && this.bufferedConcatenationCount < 100) {
+      if (this.lastBufferedType === 'code') {
+        this.lastBuffered += ' + "';
+        this.bufferedConcatenationCount++;
+      }
       this.lastBufferedType = 'text';
       this.lastBuffered += str;
       this.buf[this.lastBufferedIdx - 1] = 'jade_html = jade_html + ' + this.bufferStartChar + this.lastBuffered + '";';
     } else {
+      this.bufferedConcatenationCount = 0;
       this.buf.push('jade_html = jade_html + "' + str + '";');
       this.lastBufferedType = 'text';
       this.bufferStartChar = '"';
@@ -221,12 +226,14 @@ Compiler.prototype = {
     if (isConstant(src)) {
       return this.buffer(toConstant(src) + '', false)
     }
-    if (this.lastBufferedIdx == this.buf.length) {
+    if (this.lastBufferedIdx == this.buf.length && this.bufferedConcatenationCount < 100) {
+      this.bufferedConcatenationCount++;
       if (this.lastBufferedType === 'text') this.lastBuffered += '"';
       this.lastBufferedType = 'code';
       this.lastBuffered += ' + (' + src + ')';
       this.buf[this.lastBufferedIdx - 1] = 'jade_html = jade_html + (' + this.bufferStartChar + this.lastBuffered + ');';
     } else {
+      this.bufferedConcatenationCount = 0;
       this.buf.push('jade_html = jade_html + (' + src + ');');
       this.lastBufferedType = 'code';
       this.bufferStartChar = '';

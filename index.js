@@ -638,6 +638,44 @@ Compiler.prototype = {
   },
 
   /**
+   * Visit `Conditional`.
+   *
+   * @param {Conditional} cond
+   * @api public
+   */
+
+  visitConditional: function(cond){
+    var test = cond.test;
+    this.buf.push('if (' + test + ') {');
+    this.visit(cond.consequent);
+    this.buf.push('}')
+    if (cond.alternate) {
+      if (cond.alternate.type === 'Conditional') {
+        this.buf.push('else')
+        this.visitConditional(cond.alternate);
+      } else {
+        this.buf.push('else {');
+        this.visit(cond.alternate);
+        this.buf.push('}');
+      }
+    }
+  },
+
+  /**
+   * Visit `While`.
+   *
+   * @param {While} loop
+   * @api public
+   */
+
+  visitWhile: function(loop){
+    var test = loop.test;
+    this.buf.push('while (' + test + ') {');
+    this.visit(loop.block);
+    this.buf.push('}');
+  },
+
+  /**
    * Visit `each` block.
    *
    * @param {Each} each

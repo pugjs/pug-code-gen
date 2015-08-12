@@ -266,8 +266,19 @@ Compiler.prototype = {
    * @api public
    */
 
-  visit: function(node){
+  visit: function(node, parent){
     var debug = this.debug;
+
+    if (!node) {
+      var msg;
+      if (parent) {
+        msg = 'A child of ' + parent.type + ' (' + (parent.filename || 'Jade') + ':' + parent.line + ')';
+      } else {
+        msg = 'A top-level node';
+      }
+      msg += ' is ' + node + ', expected a Jade AST Node.';
+      throw new TypeError(msg);
+    }
 
     if (debug && node.debug !== false && node.type !== 'Block') {
       if (node.line) {
@@ -275,6 +286,30 @@ Compiler.prototype = {
         if (node.filename) js += ';jade_debug_filename = ' + stringify(node.filename);
         this.buf.push(js + ';');
       }
+    }
+
+    if (!this['visit' + node.type]) {
+      var msg;
+      if (parent) {
+        msg = 'A child of ' + parent.type
+      } else {
+        msg = 'A top-level node';
+      }
+      msg += ' (' + (node.filename || 'Jade') + ':' + node.line + ')'
+           + ' is of type ' + node.type + ','
+           + ' which is not supported by jade-code-gen.'
+      switch (node.type) {
+      case 'Filter':
+        msg += ' Please use jade-filters to preprocess this AST.'
+        break;
+      case 'Extends':
+      case 'Include':
+      case 'NamedBlock':
+      case 'FileReference': // unlikely but for the sake of completeness
+        msg += ' Please use jade-linker to preprocess this AST.'
+        break;
+      }
+      throw new TypeError(msg);
     }
 
     this.visitNode(node);
@@ -303,7 +338,7 @@ Compiler.prototype = {
     var _ = this.withinCase;
     this.withinCase = true;
     this.buf.push('switch (' + node.expr + '){');
-    this.visit(node.block);
+    this.visit(node.block, node);
     this.buf.push('}');
     this.withinCase = _;
   },
@@ -322,7 +357,7 @@ Compiler.prototype = {
       this.buf.push('case ' + node.expr + ':');
     }
     if (node.block) {
-      this.visit(node.block);
+      this.visit(node.block, node);
       this.buf.push('  break;');
     }
   },
@@ -364,7 +399,7 @@ Compiler.prototype = {
           /\n$/.test(block.nodes[i - 1].val)) {
         this.prettyIndent(1, false);
       }
-      this.visit(block.nodes[i]);
+      this.visit(block.nodes[i], block);
     }
   },
 
@@ -434,7 +469,7 @@ Compiler.prototype = {
           this.parentIndents++;
           var _indents = this.indents;
           this.indents = 0;
-          this.visit(mixin.block);
+          this.visit(mixin.block, mixin);
           this.indents = _indents;
           this.parentIndents--;
 
@@ -488,7 +523,7 @@ Compiler.prototype = {
         this.buf.push('}');
       }
       this.parentIndents++;
-      this.visit(block);
+      this.visit(block, mixin);
       this.parentIndents--;
       this.buf.push('};');
       var mixin_end = this.buf.length;
@@ -549,7 +584,7 @@ Compiler.prototype = {
       this.visitAttributes(tag.attrs, tag.attributeBlocks.slice());
       this.buffer('>');
       if (tag.code) this.visitCode(tag.code);
-      this.visit(tag.block);
+      this.visit(tag.block, tag);
 
       // pretty print
       if (pp && !tag.isInline && WHITE_SPACE_SENSITIVE_TAGS[tag.name] !== true && !tagCanInline(tag))
@@ -600,7 +635,7 @@ Compiler.prototype = {
     if (!comment.buffer) return;
     if (this.pp) this.prettyIndent(1, true);
     this.buffer('<!--' + (comment.val || ''));
-    this.visit(comment.block);
+    this.visit(comment.block, comment);
     if (this.pp) this.prettyIndent(1, true);
     this.buffer('-->');
   },
@@ -632,7 +667,7 @@ Compiler.prototype = {
     // Block support
     if (code.block) {
       if (!code.buffer) this.buf.push('{');
-      this.visit(code.block);
+      this.visit(code.block, code);
       if (!code.buffer) this.buf.push('}');
     }
   },
@@ -647,7 +682,7 @@ Compiler.prototype = {
   visitConditional: function(cond){
     var test = cond.test;
     this.buf.push('if (' + test + ') {');
-    this.visit(cond.consequent);
+    this.visit(cond.consequent, cond);
     this.buf.push('}')
     if (cond.alternate) {
       if (cond.alternate.type === 'Conditional') {
@@ -655,7 +690,7 @@ Compiler.prototype = {
         this.visitConditional(cond.alternate);
       } else {
         this.buf.push('else {');
-        this.visit(cond.alternate);
+        this.visit(cond.alternate, cond);
         this.buf.push('}');
       }
     }
@@ -671,7 +706,7 @@ Compiler.prototype = {
   visitWhile: function(loop){
     var test = loop.test;
     this.buf.push('while (' + test + ') {');
-    this.visit(loop.block);
+    this.visit(loop.block, loop);
     this.buf.push('}');
   },
 
@@ -701,13 +736,13 @@ Compiler.prototype = {
       + '  for (var ' + indexVarName + ' = 0, ' + lengthVarName + ' = ' + objVarName + '.length; ' + indexVarName + ' < ' + lengthVarName + '; ' + indexVarName + '++) {\n'
       + '    var ' + each.val + ' = ' + objVarName + '[' + indexVarName + '];\n');
 
-    this.visit(each.block);
+    this.visit(each.block, each);
 
     this.buf.push('  }\n');
 
     if (each.alternative) {
       this.buf.push('} else {');
-      this.visit(each.alternative);
+      this.visit(each.alternative, each);
       this.buf.push('}');
     }
 
@@ -718,12 +753,12 @@ Compiler.prototype = {
       + '    ' + lengthVarName + '++;\n'
       + '    var ' + each.val + ' = ' + objVarName + '[' + indexVarName + '];\n');
 
-    this.visit(each.block);
+    this.visit(each.block, each);
 
     this.buf.push('  }\n');
     if (each.alternative) {
       this.buf.push('  if (' + lengthVarName + ' === 0) {');
-      this.visit(each.alternative);
+      this.visit(each.alternative, each);
       this.buf.push('  }');
     }
     this.buf.push('}\n');

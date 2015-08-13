@@ -4,6 +4,7 @@ var doctypes = require('doctypes');
 var buildRuntime = require('jade-runtime/build');
 var runtime = require('jade-runtime');
 var compileAttrs = require('jade-attrs');
+var jadeError = require('jade-error');
 var selfClosing = require('void-elements');
 var parseJSExpression = require('character-parser').parseMax;
 var constantinople = require('constantinople');
@@ -88,13 +89,9 @@ Compiler.prototype = {
     }
   },
 
-  error: function (message, code, node) {
-    var err = new Error(message + ' on line ' + node.line + ' of ' + node.filename);
-    err.code = 'JADE:' + code;
-    err.msg = message;
-    err.line = node.line;
-    err.filename = node.filename;
-    throw err;
+  error: function (code, message, node) {
+    node = node || {};
+    throw jadeError(code, message, { line: node.line, filename: node.filename });
   },
 
   /**
@@ -540,7 +537,7 @@ Compiler.prototype = {
           tag.block.nodes.some(function (tag) {
             return tag.type !== 'Text' || !/^\s*$/.test(tag.val)
           })) {
-        this.error(name + ' is self closing and should not have content.', 'SELF_CLOSING_CONTENT', tag);
+        this.error('SELF_CLOSING_CONTENT', name + ' is self closing and should not have content.', tag);
       }
     } else {
       // Optimize attributes buffering

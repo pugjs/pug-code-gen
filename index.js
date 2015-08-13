@@ -170,22 +170,30 @@ Compiler.prototype = {
    * @api public
    */
 
-  buffer: function (str, interpolate) {
+  buffer: function (str, interpolate, node) {
     var self = this;
     if (interpolate) {
       var match = /(\\)?([#!]){((?:.|\n)*)$/.exec(str);
       if (match) {
-        this.buffer(str.substr(0, match.index), false);
+        this.buffer(str.substr(0, match.index), false, node);
         if (match[1]) { // escape
-          this.buffer(match[2] + '{', false);
-          this.buffer(match[3], true);
+          this.buffer(match[2] + '{', false, node);
+          this.buffer(match[3], true, node);
           return;
         } else {
           var rest = match[3];
-          var range = parseJSExpression(rest);
+          var range;
+          try {
+            range = parseJSExpression(rest);
+          } catch (ex) {
+            if (ex.code === 'CHARACTER_PARSER:END_OF_STRING_REACHED') {
+              this.error('NO_END_BRACKET', 'End of line was reached with no closing bracket for interpolation.', node);
+            }
+            throw ex;
+          }
           var code = ('!' == match[2] ? '' : this.runtime('escape')) + "((jade_interp = " + range.src + ") == null ? '' : jade_interp)";
-          this.bufferExpression(code);
-          this.buffer(rest.substr(range.end + 1), true);
+          this.bufferExpression(code, node);
+          this.buffer(rest.substr(range.end + 1), true, node);
           return;
         }
       }
@@ -219,9 +227,9 @@ Compiler.prototype = {
    * @api public
    */
 
-  bufferExpression: function (src) {
+  bufferExpression: function (src, node) {
     if (isConstant(src)) {
-      return this.buffer(toConstant(src) + '', false)
+      return this.buffer(toConstant(src) + '', false, node)
     }
     if (this.lastBufferedIdx == this.buf.length && this.bufferedConcatenationCount < 100) {
       this.bufferedConcatenationCount++;
@@ -332,7 +340,7 @@ Compiler.prototype = {
    */
 
   visitLiteral: function(node){
-    this.buffer(node.str);
+    this.buffer(node.str, false, node);
   },
 
   visitNamedBlock: function(block){
@@ -392,7 +400,7 @@ Compiler.prototype = {
       this.setDoctype(doctype.val || 'html');
     }
 
-    if (this.doctype) this.buffer(this.doctype);
+    if (this.doctype) this.buffer(this.doctype, false, doctype);
     this.hasCompiledDoctype = true;
   },
 
@@ -444,7 +452,7 @@ Compiler.prototype = {
 
         if (attrsBlocks.length) {
           if (attrs.length) {
-            var val = this.attrs(attrs);
+            var val = this.attrs(attrs, false, mixin);
             attrsBlocks.unshift(val);
           }
           if (attrsBlocks.length > 1) {
@@ -453,7 +461,7 @@ Compiler.prototype = {
             this.buf.push('attributes: ' + attrsBlocks[0]);
           }
         } else if (attrs.length) {
-          var val = this.attrs(attrs);
+          var val = this.attrs(attrs, false, mixin);
           this.buf.push('attributes: ' + val);
         }
 
@@ -508,7 +516,7 @@ Compiler.prototype = {
       , self = this;
 
     function bufferName() {
-      if (tag.buffer) self.bufferExpression(name);
+      if (tag.buffer) self.bufferExpression(name, tag);
       else self.buffer(name);
     }
 
@@ -527,7 +535,7 @@ Compiler.prototype = {
     if (tag.selfClosing || (!this.xml && selfClosing[tag.name])) {
       this.buffer('<');
       bufferName();
-      this.visitAttributes(tag.attrs, tag.attributeBlocks.slice());
+      this.visitAttributes(tag.attrs, tag.attributeBlocks.slice(), tag);
       this.terse
         ? this.buffer('>')
         : this.buffer('/>');
@@ -543,7 +551,7 @@ Compiler.prototype = {
       // Optimize attributes buffering
       this.buffer('<');
       bufferName();
-      this.visitAttributes(tag.attrs, tag.attributeBlocks.slice());
+      this.visitAttributes(tag.attrs, tag.attributeBlocks.slice(), tag);
       this.buffer('>');
       if (tag.code) this.visitCode(tag.code);
       this.visit(tag.block);
@@ -570,7 +578,7 @@ Compiler.prototype = {
    */
 
   visitText: function(text){
-    this.buffer(text.val, true);
+    this.buffer(text.val, true, text);
   },
 
   /**
@@ -621,7 +629,7 @@ Compiler.prototype = {
       var val = code.val.trim();
       val = 'null == (jade_interp = '+val+') ? "" : jade_interp';
       if (code.escape) val = this.runtime('escape') + '(' + val + ')';
-      this.bufferExpression(val);
+      this.bufferExpression(val, code);
     } else {
       this.buf.push(code.val);
     }
@@ -695,19 +703,19 @@ Compiler.prototype = {
    * @api public
    */
 
-  visitAttributes: function(attrs, attributeBlocks){
+  visitAttributes: function(attrs, attributeBlocks, node){
     if (attributeBlocks.length) {
       if (attrs.length) {
-        var val = this.attrs(attrs);
+        var val = this.attrs(attrs, false, node);
         attributeBlocks.unshift(val);
       }
       if (attributeBlocks.length > 1) {
-        this.bufferExpression(this.runtime('attrs') + '(' + this.runtime('merge') + '([' + attributeBlocks.join(',') + ']), ' + stringify(this.terse) + ')');
+        this.bufferExpression(this.runtime('attrs') + '(' + this.runtime('merge') + '([' + attributeBlocks.join(',') + ']), ' + stringify(this.terse) + ')', node);
       } else {
-        this.bufferExpression(this.runtime('attrs') + '(' + attributeBlocks[0] + ', ' + stringify(this.terse) + ')');
+        this.bufferExpression(this.runtime('attrs') + '(' + attributeBlocks[0] + ', ' + stringify(this.terse) + ')', node);
       }
     } else if (attrs.length) {
-      this.attrs(attrs, true);
+      this.attrs(attrs, true, node);
     }
   },
 
@@ -715,14 +723,14 @@ Compiler.prototype = {
    * Compile attributes.
    */
 
-  attrs: function(attrs, buffer){
+  attrs: function(attrs, buffer, node){
     var res = compileAttrs(attrs, {
       terse: this.terse,
       format: buffer ? 'html' : 'object',
       runtime: this.runtime.bind(this)
     });
     if (buffer)  {
-      this.bufferExpression(res);
+      this.bufferExpression(res, node);
     }
     return res;
   }

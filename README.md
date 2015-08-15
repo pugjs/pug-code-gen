@@ -12,16 +12,33 @@ Default code-generator for jade.  It generates HTML via a JavaScript template fu
 
 ## Usage
 
-Options:
+```js
+var generateCode = require('jade-code-gen');
+```
 
- - pretty (boolean)
- - compileDebug (boolean) - defaults to `true`
- - doctype (string)
- - includeRuntimeFunctions (boolean)
- - globals (array of strings)
- - self (boolean)
- - includeSources (map of filename to source string)
- - templateName (string) - defaults to `'template'`
+### `generateCode(ast, options)`
+
+Generate a JavaScript function string for the given AST.
+
+`ast` is a fully expanded AST for Jade, with all inclusion, extends, and filters resolved.
+
+`options` may contain the following properties that have the same meaning as the options with the same names in `jade`:
+
+ - pretty (boolean): default is `false`
+ - compileDebug (boolean): default is `false`
+ - doctype (string): default is `undefined`
+ - includeRuntimeFunctions (boolean): default is `false`
+ - globals (array of strings): default is `[]`
+ - self (boolean): default is `false`
+
+In addition to above, `jade-code-gen` has the following unique options:
+
+ - includeSources (object): map of filename to source string; used if `compileDebug` is `true`; default is `undefined`
+ - templateName (string): the name of the generated function; default is `'template'`
+
+### `new generateCode.CodeGenerator(ast, options)`
+
+The constructor for the internal class of the code generator. You shouldn't need to use this for most purposes.
 
 ## License
 

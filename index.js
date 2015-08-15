@@ -67,7 +67,7 @@ function Compiler(node, options) {
   this.eachCount = 0;
   if (options.doctype) this.setDoctype(options.doctype);
   this.runtimeFunctionsUsed = [];
-  this.inlineRuntimeFunctions = options.inlineRuntimeFunctions;
+  this.inlineRuntimeFunctions = options.inlineRuntimeFunctions || false;
   if (this.debug && this.inlineRuntimeFunctions) {
     this.runtimeFunctionsUsed.push('rethrow');
   }

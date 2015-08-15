@@ -27,7 +27,7 @@ Generate a JavaScript function string for the given AST.
  - pretty (boolean): default is `false`
  - compileDebug (boolean): default is `false`
  - doctype (string): default is `undefined`
- - includeRuntimeFunctions (boolean): default is `false`
+ - inlineRuntimeFunctions (boolean): default is `false`
  - globals (array of strings): default is `[]`
  - self (boolean): default is `false`
 
@@ -35,6 +35,23 @@ In addition to above, `jade-code-gen` has the following unique options:
 
  - includeSources (object): map of filename to source string; used if `compileDebug` is `true`; default is `undefined`
  - templateName (string): the name of the generated function; default is `'template'`
+
+```js
+var lex = require('jade-lexer');
+var parse = require('jade-parser');
+var generateCode = require('jade-code-gen');
+
+var funcStr = generateCode(parse(lex('p Hello world!')), {
+  compileDebug: false,
+  pretty: true,
+  inlineRuntimeFunctions: false,
+  templateName: 'helloWorld'
+});
+
+var func = Function('locals', funcStr);
+func();
+//=> '\n<p>Hello world!</p>'
+```
 
 ### `new generateCode.CodeGenerator(ast, options)`
 

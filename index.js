@@ -5,7 +5,6 @@ var buildRuntime = require('jade-runtime/build');
 var runtime = require('jade-runtime');
 var compileAttrs = require('jade-attrs');
 var selfClosing = require('void-elements');
-var parseJSExpression = require('character-parser').parseMax;
 var constantinople = require('constantinople');
 var stringify = require('js-stringify');
 var addWith = require('with');

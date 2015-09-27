@@ -570,7 +570,8 @@ Compiler.prototype = {
         ? this.buffer('>')
         : this.buffer('/>');
       // if it is non-empty throw an error
-      if (tag.block &&
+      if (tag.code ||
+          tag.block &&
           !(tag.block.type === 'Block' && tag.block.nodes.length === 0) &&
           tag.block.nodes.some(function (tag) {
             return tag.type !== 'Text' || !/^\s*$/.test(tag.val)

@@ -5,7 +5,6 @@ var buildRuntime = require('jade-runtime/build');
 var runtime = require('jade-runtime');
 var compileAttrs = require('jade-attrs');
 var selfClosing = require('void-elements');
-var parseJSExpression = require('character-parser').parseMax;
 var constantinople = require('constantinople');
 var stringify = require('js-stringify');
 var addWith = require('with');
@@ -173,26 +172,8 @@ Compiler.prototype = {
    * @api public
    */
 
-  buffer: function (str, interpolate) {
+  buffer: function (str) {
     var self = this;
-    if (interpolate) {
-      var match = /(\\)?([#!]){((?:.|\n)*)$/.exec(str);
-      if (match) {
-        this.buffer(str.substr(0, match.index), false);
-        if (match[1]) { // escape
-          this.buffer(match[2] + '{', false);
-          this.buffer(match[3], true);
-          return;
-        } else {
-          var rest = match[3];
-          var range = parseJSExpression(rest);
-          var code = ('!' == match[2] ? '' : this.runtime('escape')) + "((jade_interp = " + range.src + ") == null ? '' : jade_interp)";
-          this.bufferExpression(code);
-          this.buffer(rest.substr(range.end + 1), true);
-          return;
-        }
-      }
-    }
 
     str = stringify(str);
     str = str.substr(1, str.length - 2);
@@ -224,7 +205,7 @@ Compiler.prototype = {
 
   bufferExpression: function (src) {
     if (isConstant(src)) {
-      return this.buffer(toConstant(src) + '', false)
+      return this.buffer(toConstant(src) + '')
     }
     if (this.lastBufferedIdx == this.buf.length && this.bufferedConcatenationCount < 100) {
       this.bufferedConcatenationCount++;
@@ -609,7 +590,7 @@ Compiler.prototype = {
    */
 
   visitText: function(text){
-    this.buffer(text.val, true);
+    this.buffer(text.val);
   },
 
   /**

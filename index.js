@@ -547,9 +547,11 @@ Compiler.prototype = {
       this.buffer('<');
       bufferName();
       this.visitAttributes(tag.attrs, tag.attributeBlocks.slice());
-      this.terse
-        ? this.buffer('>')
-        : this.buffer('/>');
+      if (this.terse && !tag.selfClosing) {
+        this.buffer('>');
+      } else {
+        this.buffer('/>');
+      }
       // if it is non-empty throw an error
       if (tag.code ||
           tag.block &&

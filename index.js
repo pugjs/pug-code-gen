@@ -365,17 +365,17 @@ Compiler.prototype = {
    */
 
   visitBlock: function(block){
-    var escape = this.escape;
+    var escapePrettyMode = this.escapePrettyMode;
     var pp = this.pp;
 
     // Pretty print multi-line text
-    if (pp && block.nodes.length > 1 && !escape &&
+    if (pp && block.nodes.length > 1 && !escapePrettyMode &&
         block.nodes[0].type === 'Text' && block.nodes[1].type === 'Text' ) {
       this.prettyIndent(1, true);
     }
     for (var i = 0; i < block.nodes.length; ++i) {
       // Pretty print text
-      if (pp && i > 0 && !escape &&
+      if (pp && i > 0 && !escapePrettyMode &&
           block.nodes[i].type === 'Text' && block.nodes[i-1].type === 'Text' &&
           /\n$/.test(block.nodes[i - 1].val)) {
         this.prettyIndent(1, false);
@@ -531,7 +531,7 @@ Compiler.prototype = {
       else self.buffer(name);
     }
 
-    if (WHITE_SPACE_SENSITIVE_TAGS[tag.name] === true) this.escape = true;
+    if (WHITE_SPACE_SENSITIVE_TAGS[tag.name] === true) this.escapePrettyMode = true;
 
     if (!this.hasCompiledTag) {
       if (!this.hasCompiledDoctype && 'html' == name) {
@@ -579,7 +579,7 @@ Compiler.prototype = {
       this.buffer('>');
     }
 
-    if (WHITE_SPACE_SENSITIVE_TAGS[tag.name] === true) this.escape = false;
+    if (WHITE_SPACE_SENSITIVE_TAGS[tag.name] === true) this.escapePrettyMode = false;
 
     this.indents--;
   },
@@ -642,7 +642,7 @@ Compiler.prototype = {
     if (code.buffer) {
       var val = code.val.trim();
       val = 'null == (jade_interp = '+val+') ? "" : jade_interp';
-      if (code.escape) val = this.runtime('escape') + '(' + val + ')';
+      if (code.mustEscape !== false) val = this.runtime('escape') + '(' + val + ')';
       this.bufferExpression(val);
     } else {
       this.buf.push(code.val);

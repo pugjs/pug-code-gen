@@ -517,17 +517,18 @@ Compiler.prototype = {
    * attributes, visiting the `tag`'s code and block.
    *
    * @param {Tag} tag
+   * @param {boolean} interpolated
    * @api public
    */
 
-  visitTag: function(tag){
+  visitTag: function(tag, interpolated){
     this.indents++;
     var name = tag.name
       , pp = this.pp
       , self = this;
 
     function bufferName() {
-      if (tag.buffer) self.bufferExpression(name);
+      if (interpolated) self.bufferExpression(tag.expr);
       else self.buffer(name);
     }
 
@@ -585,6 +586,17 @@ Compiler.prototype = {
   },
 
   /**
+   * Visit InterpolatedTag.
+   *
+   * @param {InterpolatedTag} tag
+   * @api public
+   */
+
+  visitInterpolatedTag: function(tag) {
+    return this.visitTag(tag, true);
+  },
+
+  /**
    * Visit `text` node.
    *
    * @param {Text} text
@@ -607,6 +619,17 @@ Compiler.prototype = {
     if (this.pp) this.prettyIndent(1, true);
     this.buffer('<!--' + comment.val + '-->');
   },
+
+  /**
+   * Visit a `YieldBlock`.
+   *
+   * This is necessary since we allow compiling a file with `yield`.
+   *
+   * @param {YieldBlock} block
+   * @api public
+   */
+
+  visitYieldBlock: function(block) {},
 
   /**
    * Visit a `BlockComment`.
@@ -712,7 +735,7 @@ Compiler.prototype = {
       + 'var ' + objVarName + ' = ' + each.obj + ';\n'
       + 'if (\'number\' == typeof ' + objVarName + '.length) {\n');
 
-    if (each.alternative) {
+    if (each.alternate) {
       this.buf.push('if (' + objVarName + '.length) {');
     }
 
@@ -724,9 +747,9 @@ Compiler.prototype = {
 
     this.buf.push('  }\n');
 
-    if (each.alternative) {
+    if (each.alternate) {
       this.buf.push('} else {');
-      this.visit(each.alternative, each);
+      this.visit(each.alternate, each);
       this.buf.push('}');
     }
 
@@ -740,9 +763,9 @@ Compiler.prototype = {
     this.visit(each.block, each);
 
     this.buf.push('  }\n');
-    if (each.alternative) {
+    if (each.alternate) {
       this.buf.push('  if (' + lengthVarName + ' === 0) {');
-      this.visit(each.alternative, each);
+      this.visit(each.alternate, each);
       this.buf.push('  }');
     }
     this.buf.push('}\n');
@@ -792,6 +815,10 @@ function tagCanInline(tag) {
   function isInline(node){
     // Recurse if the node is a block
     if (node.type === 'Block') return node.nodes.every(isInline);
+    // When there is a YieldBlock here, it is an indication that the file is
+    // expected to be included but is not. If this is the case, the block
+    // must be empty.
+    if (node.type === 'YieldBlock') return true;
     return (node.type === 'Text' && !/\n/.test(node.val)) || node.isInline;
   }
 

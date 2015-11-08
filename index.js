@@ -8,6 +8,7 @@ var selfClosing = require('void-elements');
 var constantinople = require('constantinople');
 var stringify = require('js-stringify');
 var addWith = require('with');
+var walk = require('jade-walk');
 
 // This is used to prevent pretty printing inside certain tags
 var WHITE_SPACE_SENSITIVE_TAGS = {
@@ -64,7 +65,25 @@ function Compiler(node, options) {
   this.mixins = {};
   this.dynamicMixins = false;
   this.eachCount = 0;
-  if (options.doctype) this.setDoctype(options.doctype);
+  if (options.doctype) {
+    this.setDoctype(options.doctype);
+  } else {
+    var doctypeList = [];
+    // doctypes[name.toLowerCase()] || '<!DOCTYPE ' + name + '>';
+    walk(node, function (node) {
+      if (node.type === 'Doctype' && node.val) {
+        var name = doctypes[node.val.toLowerCase()] || '<!DOCTYPE ' + node.val + '>';
+        if (doctypeList.indexOf(name) === -1) {
+          doctypeList.push(name);
+        }
+      }
+    });
+    if (doctypeList.length === 1) {
+      this.doctype = doctypeList[0];
+      this.terse = this.doctype.toLowerCase() == '<!doctype html>';
+      this.xml = 0 == this.doctype.indexOf('<?xml');
+    }
+  }
   this.runtimeFunctionsUsed = [];
   this.inlineRuntimeFunctions = options.inlineRuntimeFunctions || false;
   if (this.debug && this.inlineRuntimeFunctions) {

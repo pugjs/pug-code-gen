@@ -560,7 +560,7 @@ Compiler.prototype = {
           tag.block.nodes.some(function (tag) {
             return tag.type !== 'Text' || !/^\s*$/.test(tag.val)
           })) {
-        this.error(name + ' is self closing and should not have content.', 'SELF_CLOSING_CONTENT', tag);
+        this.error(name + ' is a self closing element: <'+name+'/> but contains nested content.', 'SELF_CLOSING_CONTENT', tag);
       }
     } else {
       // Optimize attributes buffering

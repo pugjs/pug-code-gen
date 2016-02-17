@@ -1,9 +1,9 @@
 'use strict';
 
 var doctypes = require('doctypes');
-var buildRuntime = require('jade-runtime/build');
-var runtime = require('jade-runtime');
-var compileAttrs = require('jade-attrs');
+var buildRuntime = require('pug-runtime/build');
+var runtime = require('pug-runtime');
+var compileAttrs = require('pug-attrs');
 var selfClosing = require('void-elements');
 var constantinople = require('constantinople');
 var stringify = require('js-stringify');
@@ -16,13 +16,13 @@ var WHITE_SPACE_SENSITIVE_TAGS = {
 };
 
 var INTERNAL_VARIABLES = [
-  'jade',
-  'jade_mixins',
-  'jade_interp',
-  'jade_debug_filename',
-  'jade_debug_line',
-  'jade_debug_sources',
-  'jade_html'
+  'pug',
+  'pug_mixins',
+  'pug_interp',
+  'pug_debug_filename',
+  'pug_debug_line',
+  'pug_debug_sources',
+  'pug_html'
 ];
 
 module.exports = generateCode;
@@ -33,10 +33,10 @@ function generateCode(ast, options) {
 
 
 function isConstant(src) {
-  return constantinople(src, {jade: runtime, 'jade_interp': undefined});
+  return constantinople(src, {pug: runtime, 'pug_interp': undefined});
 }
 function toConstant(src) {
-  return constantinople.toConstant(src, {jade: runtime, 'jade_interp': undefined});
+  return constantinople.toConstant(src, {pug: runtime, 'pug_interp': undefined});
 }
 
 /**
@@ -81,15 +81,15 @@ Compiler.prototype = {
   runtime: function (name) {
     if (this.inlineRuntimeFunctions) {
       this.runtimeFunctionsUsed.push(name);
-      return 'jade_' + name;
+      return 'pug_' + name;
     } else {
-      return 'jade.' + name;
+      return 'pug.' + name;
     }
   },
 
   error: function (message, code, node) {
     var err = new Error(message + ' on line ' + node.line + ' of ' + node.filename);
-    err.code = 'JADE:' + code;
+    err.code = 'PUG:' + code;
     err.msg = message;
     err.line = node.line;
     err.filename = node.filename;
@@ -104,7 +104,7 @@ Compiler.prototype = {
 
   compile: function(){
     this.buf = [];
-    if (this.pp) this.buf.push("var jade_indent = [];");
+    if (this.pp) this.buf.push("var pug_indent = [];");
     this.lastBufferedIdx = -1;
     this.visit(this.node);
     if (!this.dynamicMixins) {
@@ -126,27 +126,27 @@ Compiler.prototype = {
     if (this.options.self) {
       js = 'var self = locals || {};' + js;
     } else {
-      js = addWith('locals || {}', js, globals.concat(this.runtimeFunctionsUsed.map(function (name) { return 'jade_' + name; })));
+      js = addWith('locals || {}', js, globals.concat(this.runtimeFunctionsUsed.map(function (name) { return 'pug_' + name; })));
     }
     if (this.debug) {
       if (this.options.includeSources) {
-        js = 'var jade_debug_sources = ' + stringify(this.options.includeSources) + ';\n' + js;
+        js = 'var pug_debug_sources = ' + stringify(this.options.includeSources) + ';\n' + js;
       }
-      js = 'var jade_debug_filename, jade_debug_line;' +
+      js = 'var pug_debug_filename, pug_debug_line;' +
         'try {' +
         js +
         '} catch (err) {' +
-        (this.inlineRuntimeFunctions ? 'jade_rethrow' : 'jade.rethrow') +
-        '(err, jade_debug_filename, jade_debug_line' +
+        (this.inlineRuntimeFunctions ? 'pug_rethrow' : 'pug.rethrow') +
+        '(err, pug_debug_filename, pug_debug_line' +
         (
           this.options.includeSources
-          ? ', jade_debug_sources[jade_debug_filename]'
+          ? ', pug_debug_sources[pug_debug_filename]'
           : ''
         ) +
         ');' +
         '}';
     }
-    return buildRuntime(this.runtimeFunctionsUsed) + 'function ' + (this.options.templateName || 'template') + '(locals) {var jade_html = "", jade_mixins = {}, jade_interp;' + js + ';return jade_html;}';
+    return buildRuntime(this.runtimeFunctionsUsed) + 'function ' + (this.options.templateName || 'template') + '(locals) {var pug_html = "", pug_mixins = {}, pug_interp;' + js + ';return pug_html;}';
   },
 
   /**
@@ -185,10 +185,10 @@ Compiler.prototype = {
       }
       this.lastBufferedType = 'text';
       this.lastBuffered += str;
-      this.buf[this.lastBufferedIdx - 1] = 'jade_html = jade_html + ' + this.bufferStartChar + this.lastBuffered + '";';
+      this.buf[this.lastBufferedIdx - 1] = 'pug_html = pug_html + ' + this.bufferStartChar + this.lastBuffered + '";';
     } else {
       this.bufferedConcatenationCount = 0;
-      this.buf.push('jade_html = jade_html + "' + str + '";');
+      this.buf.push('pug_html = pug_html + "' + str + '";');
       this.lastBufferedType = 'text';
       this.bufferStartChar = '"';
       this.lastBuffered = str;
@@ -212,10 +212,10 @@ Compiler.prototype = {
       if (this.lastBufferedType === 'text') this.lastBuffered += '"';
       this.lastBufferedType = 'code';
       this.lastBuffered += ' + (' + src + ')';
-      this.buf[this.lastBufferedIdx - 1] = 'jade_html = jade_html + (' + this.bufferStartChar + this.lastBuffered + ');';
+      this.buf[this.lastBufferedIdx - 1] = 'pug_html = pug_html + (' + this.bufferStartChar + this.lastBuffered + ');';
     } else {
       this.bufferedConcatenationCount = 0;
-      this.buf.push('jade_html = jade_html + (' + src + ');');
+      this.buf.push('pug_html = pug_html + (' + src + ');');
       this.lastBufferedType = 'code';
       this.bufferStartChar = '';
       this.lastBuffered = '(' + src + ')';
@@ -237,7 +237,7 @@ Compiler.prototype = {
     newline = newline ? '\n' : '';
     this.buffer(newline + Array(this.indents + offset).join(this.pp));
     if (this.parentIndents)
-      this.buf.push('jade_html = jade_html + jade_indent.join("");');
+      this.buf.push('pug_html = pug_html + pug_indent.join("");');
   },
 
   /**
@@ -253,18 +253,18 @@ Compiler.prototype = {
     if (!node) {
       var msg;
       if (parent) {
-        msg = 'A child of ' + parent.type + ' (' + (parent.filename || 'Jade') + ':' + parent.line + ')';
+        msg = 'A child of ' + parent.type + ' (' + (parent.filename || 'Pug') + ':' + parent.line + ')';
       } else {
         msg = 'A top-level node';
       }
-      msg += ' is ' + node + ', expected a Jade AST Node.';
+      msg += ' is ' + node + ', expected a Pug AST Node.';
       throw new TypeError(msg);
     }
 
     if (debug && node.debug !== false && node.type !== 'Block') {
       if (node.line) {
-        var js = ';jade_debug_line = ' + node.line;
-        if (node.filename) js += ';jade_debug_filename = ' + stringify(node.filename);
+        var js = ';pug_debug_line = ' + node.line;
+        if (node.filename) js += ';pug_debug_filename = ' + stringify(node.filename);
         this.buf.push(js + ';');
       }
     }
@@ -276,18 +276,18 @@ Compiler.prototype = {
       } else {
         msg = 'A top-level node';
       }
-      msg += ' (' + (node.filename || 'Jade') + ':' + node.line + ')'
+      msg += ' (' + (node.filename || 'Pug') + ':' + node.line + ')'
            + ' is of type ' + node.type + ','
-           + ' which is not supported by jade-code-gen.'
+           + ' which is not supported by pug-code-gen.'
       switch (node.type) {
       case 'Filter':
-        msg += ' Please use jade-filters to preprocess this AST.'
+        msg += ' Please use pug-filters to preprocess this AST.'
         break;
       case 'Extends':
       case 'Include':
       case 'NamedBlock':
       case 'FileReference': // unlikely but for the sake of completeness
-        msg += ' Please use jade-linker to preprocess this AST.'
+        msg += ' Please use pug-linker to preprocess this AST.'
         break;
       }
       throw new TypeError(msg);
@@ -392,9 +392,9 @@ Compiler.prototype = {
    */
 
   visitMixinBlock: function(block){
-    if (this.pp) this.buf.push("jade_indent.push('" + Array(this.indents + 1).join(this.pp) + "');");
+    if (this.pp) this.buf.push("pug_indent.push('" + Array(this.indents + 1).join(this.pp) + "');");
     this.buf.push('block && block();');
-    if (this.pp) this.buf.push("jade_indent.pop();");
+    if (this.pp) this.buf.push("pug_indent.pop();");
   },
 
   /**
@@ -424,7 +424,7 @@ Compiler.prototype = {
    */
 
   visitMixin: function(mixin){
-    var name = 'jade_mixins[';
+    var name = 'pug_mixins[';
     var args = mixin.args || '';
     var block = mixin.block;
     var attrs = mixin.attrs;
@@ -438,7 +438,7 @@ Compiler.prototype = {
     this.mixins[key] = this.mixins[key] || {used: false, instances: []};
     if (mixin.call) {
       this.mixins[key].used = true;
-      if (pp) this.buf.push("jade_indent.push('" + Array(this.indents + 1).join(pp) + "');")
+      if (pp) this.buf.push("pug_indent.push('" + Array(this.indents + 1).join(pp) + "');")
       if (block || attrs.length || attrsBlocks.length) {
 
         this.buf.push(name + '.call({');
@@ -485,7 +485,7 @@ Compiler.prototype = {
       } else {
         this.buf.push(name + '(' + args + ');');
       }
-      if (pp) this.buf.push("jade_indent.pop();")
+      if (pp) this.buf.push("pug_indent.pop();")
     } else {
       var mixin_start = this.buf.length;
       args = args ? args.split(',') : [];
@@ -493,14 +493,14 @@ Compiler.prototype = {
       if (args.length && /^\.\.\./.test(args[args.length - 1].trim())) {
         rest = args.pop().trim().replace(/^\.\.\./, '');
       }
-      // we need use jade_interp here for v8: https://code.google.com/p/v8/issues/detail?id=4165
+      // we need use pug_interp here for v8: https://code.google.com/p/v8/issues/detail?id=4165
       // once fixed, use this: this.buf.push(name + ' = function(' + args.join(',') + '){');
-      this.buf.push(name + ' = jade_interp = function(' + args.join(',') + '){');
+      this.buf.push(name + ' = pug_interp = function(' + args.join(',') + '){');
       this.buf.push('var block = (this && this.block), attributes = (this && this.attributes) || {};');
       if (rest) {
         this.buf.push('var ' + rest + ' = [];');
-        this.buf.push('for (jade_interp = ' + args.length + '; jade_interp < arguments.length; jade_interp++) {');
-        this.buf.push('  ' + rest + '.push(arguments[jade_interp]);');
+        this.buf.push('for (pug_interp = ' + args.length + '; pug_interp < arguments.length; pug_interp++) {');
+        this.buf.push('  ' + rest + '.push(arguments[pug_interp]);');
         this.buf.push('}');
       }
       this.parentIndents++;
@@ -664,7 +664,7 @@ Compiler.prototype = {
     // Buffer code
     if (code.buffer) {
       var val = code.val.trim();
-      val = 'null == (jade_interp = '+val+') ? "" : jade_interp';
+      val = 'null == (pug_interp = '+val+') ? "" : pug_interp';
       if (code.mustEscape !== false) val = this.runtime('escape') + '(' + val + ')';
       this.bufferExpression(val);
     } else {
@@ -725,9 +725,9 @@ Compiler.prototype = {
    */
 
   visitEach: function(each){
-    var indexVarName = each.key || 'jade_index' + this.eachCount
-      , objVarName = 'jade_obj' + this.eachCount
-      , lengthVarName = 'jade_length' + this.eachCount;
+    var indexVarName = each.key || 'pug_index' + this.eachCount
+      , objVarName = 'pug_obj' + this.eachCount
+      , lengthVarName = 'pug_length' + this.eachCount;
     this.eachCount++;
 
     this.buf.push(''

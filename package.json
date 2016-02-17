@@ -1,15 +1,15 @@
 {
-  "name": "jade-code-gen",
-  "version": "0.0.4",
-  "description": "Default code-generator for jade.  It generates HTML via a JavaScript template function.",
+  "name": "pug-code-gen",
+  "version": "0.0.0",
+  "description": "Default code-generator for pug.  It generates HTML via a JavaScript template function.",
   "keywords": [
-    "jade"
+    "pug"
   ],
   "dependencies": {
     "constantinople": "^3.0.1",
     "doctypes": "^1.0.0",
-    "jade-attrs": "^2.0.0",
-    "jade-runtime": "^2.0.0",
+    "pug-attrs": "^2.0.1",
+    "pug-runtime": "^2.0.0",
     "js-stringify": "^1.0.1",
     "void-elements": "^2.0.1",
     "with": "^5.0.0"
@@ -21,7 +21,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jadejs/jade-code-gen.git"
+    "url": "https://github.com/pugjs/pug-code-gen.git"
   },
   "author": "Forbes Lindesay",
   "license": "MIT"

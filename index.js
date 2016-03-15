@@ -88,11 +88,10 @@ Compiler.prototype = {
   },
 
   error: function (message, code, node) {
-    var err = new Error(message + ' on line ' + node.line + ' of ' + node.filename);
-    err.code = 'PUG:' + code;
-    err.msg = message;
-    err.line = node.line;
-    err.filename = node.filename;
+    var err = makeError(code, message, {
+      line: node.line,
+      filename: node.filename,
+    });
     throw err;
   },
 

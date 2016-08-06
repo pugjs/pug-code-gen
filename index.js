@@ -294,7 +294,6 @@ Compiler.prototype = {
     }
 
     this.visitNode(node);
-    //this.buf.push('');
   },
 
   /**
@@ -316,12 +315,9 @@ Compiler.prototype = {
    */
 
   visitCase: function(node){
-    var _ = this.withinCase;
-    this.withinCase = true;
     this.buf.push('switch (' + node.expr + '){');
     this.visit(node.block, node);
     this.buf.push('}');
-    this.withinCase = _;
   },
 
   /**

@@ -146,7 +146,7 @@ Compiler.prototype = {
         ');' +
         '}';
     }
-    return buildRuntime(this.runtimeFunctionsUsed) + 'function ' + (this.options.templateName || 'template') + '(locals) {var pug_html = "", pug_mixins = {}, pug_interp;' + js + ';return pug_html;}';
+    return buildRuntime(this.runtimeFunctionsUsed) + 'function ' + (this.options.templateName || 'template') + '(locals) {"use strict"; var pug_html = "", pug_mixins = {}, pug_interp;' + js + ';return pug_html;}';
   },
 
   /**
@@ -737,7 +737,7 @@ Compiler.prototype = {
 
     this.buf.push(''
       + '  for (var ' + indexVarName + ' = 0, ' + lengthVarName + ' = ' + objVarName + '.length; ' + indexVarName + ' < ' + lengthVarName + '; ' + indexVarName + '++) {\n'
-      + '    var ' + each.val + ' = ' + objVarName + '[' + indexVarName + '];\n');
+      + '    let ' + each.val + ' = ' + objVarName + '[' + indexVarName + '];\n');
 
     this.visit(each.block, each);
 
@@ -754,7 +754,7 @@ Compiler.prototype = {
       + '  var ' + lengthVarName + ' = 0;\n'
       + '  for (var ' + indexVarName + ' in ' + objVarName + ') {\n'
       + '    ' + lengthVarName + '++;\n'
-      + '    var ' + each.val + ' = ' + objVarName + '[' + indexVarName + '];\n');
+      + '    let ' + each.val + ' = ' + objVarName + '[' + indexVarName + '];\n');
 
     this.visit(each.block, each);
 

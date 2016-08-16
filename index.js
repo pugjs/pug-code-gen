@@ -613,7 +613,7 @@ Compiler.prototype = {
   visitComment: function(comment){
     if (!comment.buffer) return;
     if (this.pp) this.prettyIndent(1, true);
-    this.buffer('<!--' + comment.val + '-->');
+    this.buffer('<!-- ' + comment.val.trim() + ' -->');
   },
 
   /**

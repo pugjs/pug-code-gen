@@ -721,50 +721,49 @@ Compiler.prototype = {
    */
 
   visitEach: function(each){
-    var indexVarName = each.key || 'pug_index' + this.eachCount
-      , objVarName = 'pug_obj' + this.eachCount
-      , lengthVarName = 'pug_length' + this.eachCount;
+    var indexVarName = each.key || 'pug_index' + this.eachCount;
     this.eachCount++;
 
     this.buf.push(''
       + '// iterate ' + each.obj + '\n'
-      + 'var ' + objVarName + ' = ' + each.obj + ';\n'
-      + 'if (\'number\' == typeof ' + objVarName + '.length) {\n');
+      + ';(function(){\n'
+      + '  var $$obj = ' + each.obj + ';\n'
+      + '  if (\'number\' == typeof $$obj.length) {');
 
     if (each.alternate) {
-      this.buf.push('if (' + objVarName + '.length) {');
+      this.buf.push('    if ($$obj.length) {');
     }
 
     this.buf.push(''
-      + '  for (var ' + indexVarName + ' = 0, ' + lengthVarName + ' = ' + objVarName + '.length; ' + indexVarName + ' < ' + lengthVarName + '; ' + indexVarName + '++) {\n'
-      + '    var ' + each.val + ' = ' + objVarName + '[' + indexVarName + '];\n');
+      + '      for (var ' + indexVarName + ' = 0, $$l = $$obj.length; ' + indexVarName + ' < $$l; ' + indexVarName + '++) {\n'
+      + '        var ' + each.val + ' = $$obj[' + indexVarName + '];');
 
     this.visit(each.block, each);
 
-    this.buf.push('  }\n');
+    this.buf.push('      }');
 
     if (each.alternate) {
-      this.buf.push('} else {');
+      this.buf.push('    } else {');
       this.visit(each.alternate, each);
-      this.buf.push('}');
+      this.buf.push('    }');
     }
 
     this.buf.push(''
-      + '} else {\n'
-      + '  var ' + lengthVarName + ' = 0;\n'
-      + '  for (var ' + indexVarName + ' in ' + objVarName + ') {\n'
-      + '    ' + lengthVarName + '++;\n'
-      + '    var ' + each.val + ' = ' + objVarName + '[' + indexVarName + '];\n');
+      + '  } else {\n'
+      + '    var $$l = 0;\n'
+      + '    for (var ' + indexVarName + ' in $$obj) {\n'
+      + '      $$l++;\n'
+      + '      var ' + each.val + ' = $$obj[' + indexVarName + '];');
 
     this.visit(each.block, each);
 
-    this.buf.push('  }\n');
+    this.buf.push('    }');
     if (each.alternate) {
-      this.buf.push('  if (' + lengthVarName + ' === 0) {');
+      this.buf.push('    if ($$l === 0) {');
       this.visit(each.alternate, each);
-      this.buf.push('  }');
+      this.buf.push('    }');
     }
-    this.buf.push('}\n');
+    this.buf.push('  }\n}).call(this);\n');
   },
 
   /**

@@ -39,6 +39,7 @@ In addition to above, `pug-code-gen` has the following unique options:
 ```js
 var lex = require('pug-lexer');
 var parse = require('pug-parser');
+var wrap = require('pug-runtime/wrap');
 var generateCode = require('pug-code-gen');
 
 var funcStr = generateCode(parse(lex('p Hello world!')), {
@@ -47,8 +48,9 @@ var funcStr = generateCode(parse(lex('p Hello world!')), {
   inlineRuntimeFunctions: false,
   templateName: 'helloWorld'
 });
+//=> 'function helloWorld(locals) { ... }'
 
-var func = Function('locals', funcStr);
+var func = wrap(funcStr, 'helloWorld');
 func();
 //=> '\n<p>Hello world!</p>'
 ```
